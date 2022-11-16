@@ -1,4 +1,3 @@
-use bitvec::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3::{prelude::*, types::PyDict};
 use quick_xml::de::from_str;
@@ -7,7 +6,7 @@ use std::io::SeekFrom;
 use std::io::{self, Read};
 use std::path::Path;
 use std::str;
-use std::{collections::HashMap, fs::File};
+use std::{fs::File};
 use std::{convert::TryInto, io::prelude::*};
 pub mod qvd_structure;
 
@@ -19,32 +18,24 @@ fn qvd(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn read_qvd(py: Python, file_name: String) -> PyResult<Py<PyDict>> {
+fn read_qvd(py: Python, file_name: String, find_string: String) -> PyResult<Py<PyDict>> {
     let xml: String = get_xml_data(&file_name).expect("Error reading file");
     let dict = PyDict::new(py);
     let binary_section_offset = xml.as_bytes().len();
 
     let qvd_structure: QvdTableHeader = from_str(&xml).unwrap();
-    let mut symbol_map: HashMap<String, Vec<Option<String>>> = HashMap::new();
 
     if let Ok(f) = File::open(&file_name) {
         // Seek to the end of the XML section
         let buf = read_qvd_to_buf(f, binary_section_offset);
-        let rows_start = qvd_structure.offset;
-        let rows_end = buf.len();
-        let rows_section = &buf[rows_start..rows_end];
-        let record_byte_size = qvd_structure.record_byte_size;
-
+        let mut strings: Vec<Option<String>> = Vec::new();
         for field in qvd_structure.fields.headers {
-            symbol_map.insert(
-                field.field_name.clone(),
-                get_symbols_as_strings(&buf, &field),
-            );
-            let symbol_indexes = get_row_indexes(&rows_section, &field, record_byte_size);
-            let column_values =
-                match_symbols_with_indexes(&symbol_map[&field.field_name], &symbol_indexes);
-            dict.set_item(field.field_name, column_values).unwrap();
+            let records = get_symbols_as_strings(&buf, &field);
+            if records.into_iter().any(|x| x == Some(find_string.clone())) {
+                strings.push(Some(field.field_name.clone()));
+            }
         }
+        dict.set_item(file_name.clone(), strings).unwrap();
     }
     Ok(dict.into())
 }
@@ -55,18 +46,6 @@ fn read_qvd_to_buf(mut f: File, binary_section_offset: usize) -> Vec<u8> {
     let mut buf: Vec<u8> = Vec::new();
     f.read_to_end(&mut buf).unwrap();
     buf
-}
-
-fn match_symbols_with_indexes(symbols: &[Option<String>], pointers: &[i64]) -> Vec<Option<String>> {
-    let mut cols: Vec<Option<String>> = Vec::new();
-    for pointer in pointers.iter() {
-        if symbols.is_empty() || *pointer < 0 {
-            cols.push(None);
-        } else {
-            cols.push(symbols[*pointer as usize].clone());
-        }
-    }
-    cols
 }
 
 fn get_symbols_as_strings(buf: &[u8], field: &QvdFieldHeader) -> Vec<Option<String>> {
@@ -134,47 +113,6 @@ fn get_symbols_as_strings(buf: &[u8], field: &QvdFieldHeader) -> Vec<Option<Stri
         }
     }
     strings
-}
-
-// Retrieve bit stuffed data. Each row has index to value from symbol map.
-fn get_row_indexes(buf: &[u8], field: &QvdFieldHeader, record_byte_size: usize) -> Vec<i64> {
-    let mut cloned_buf = buf.to_owned();
-    let chunks = cloned_buf.chunks_mut(record_byte_size);
-    let mut indexes: Vec<i64> = Vec::new();
-    for chunk in chunks {
-        // Reverse the bytes in the record
-        chunk.reverse();
-        let bits = BitSlice::<Msb0, _>::from_slice(&chunk[..]).unwrap();
-        let start = bits.len() - field.bit_offset;
-        let end = bits.len() - field.bit_offset - field.bit_width;
-        let binary = bitslice_to_vec(&bits[end..start]);
-        let index = binary_to_u32(binary);
-        indexes.push((index as i32 + field.bias) as i64);
-    }
-    indexes
-}
-
-// Slow
-fn binary_to_u32(binary: Vec<u8>) -> u32 {
-    let mut sum: u32 = 0;
-    for bit in binary {
-        sum <<= 1;
-        sum += bit as u32;
-    }
-    sum
-}
-
-// Slow
-fn bitslice_to_vec(bitslice: &BitSlice<Msb0, u8>) -> Vec<u8> {
-    let mut v: Vec<u8> = Vec::new();
-    for bit in bitslice {
-        let val = match bit {
-            true => 1,
-            false => 0,
-        };
-        v.push(val);
-    }
-    v
 }
 
 fn get_xml_data(file_name: &str) -> Result<String, io::Error> {

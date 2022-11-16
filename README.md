@@ -1,9 +1,9 @@
-# Read Qlik Sense .qvd files 🛠
-[![CI pipeline](https://github.com/SBentley/qvd-utils/actions/workflows/CI.yml/badge.svg)](https://github.com/SBentley/qvd-utils/actions/workflows/CI.yml)
+# Find string in Qlik Sense .qvd files 🛠
 
-A python library for reading Qlik Sense .qvd file format, written in Rust.
-Files can be read to DataFrame or dictionary.
+A python library for finding a specific string in a Qlik Sense .qvd file, written in Rust. 
+Based on the library https://github.com/SBentley/qvd-utils 
 
+<!--
 ## Install
 
 Install from PyPi https://pypi.org/project/qvd/
@@ -11,17 +11,16 @@ Install from PyPi https://pypi.org/project/qvd/
 ```sh
 pip install qvd
 ```
+-->
 
 ## Usage
 
 ```python
 from qvd import qvd_reader
 
-df = qvd_reader.read('test.qvd')
+df = qvd_reader.read('test.qvd','find_this_string')
 print(df)
 ```
-
-![example](https://raw.githubusercontent.com/SBentley/qvd-utils/master/example.png)
 
 ### Developing
 
