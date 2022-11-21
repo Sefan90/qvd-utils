@@ -1,5 +1,5 @@
 use pyo3::wrap_pyfunction;
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::{prelude::*, types::PyDict, types::PyList};
 use quick_xml::de::from_str;
 use qvd_structure::{QvdFieldHeader, QvdTableHeader};
 use std::io::SeekFrom;
@@ -9,6 +9,7 @@ use std::str;
 use std::{fs::File};
 use std::{convert::TryInto, io::prelude::*};
 pub mod qvd_structure;
+use regex::Regex;
 
 #[pymodule]
 fn qvd(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -18,24 +19,43 @@ fn qvd(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn read_qvd(py: Python, file_name: String, find_string: String) -> PyResult<Py<PyDict>> {
-    let xml: String = get_xml_data(&file_name).expect("Error reading file");
+fn read_qvd(py: Python, files: &PyList, find_string: String, wildcard: bool) -> PyResult<Py<PyDict>> {
     let dict = PyDict::new(py);
-    let binary_section_offset = xml.as_bytes().len();
+    for file_name in files {
+        let xml: String = get_xml_data(&file_name.to_string()).expect("Error reading file");
+        let binary_section_offset = xml.as_bytes().len();
+        let qvd_structure: QvdTableHeader = from_str(&xml).unwrap();
 
-    let qvd_structure: QvdTableHeader = from_str(&xml).unwrap();
+        if let Ok(f) = File::open(&file_name.to_string()) {
+            // Seek to the end of the XML section
+            let buf = read_qvd_to_buf(f, binary_section_offset);
+            let mut strings: Vec<Option<String>> = Vec::new();
 
-    if let Ok(f) = File::open(&file_name) {
-        // Seek to the end of the XML section
-        let buf = read_qvd_to_buf(f, binary_section_offset);
-        let mut strings: Vec<Option<String>> = Vec::new();
-        for field in qvd_structure.fields.headers {
-            let records = get_symbols_as_strings(&buf, &field);
-            if records.into_iter().any(|x| x == Some(find_string.clone())) {
-                strings.push(Some(field.field_name.clone()));
+            if wildcard == true {
+                for field in qvd_structure.fields.headers {
+                    let records = get_symbols_as_strings(&buf, &field);
+                    let re = Regex::new(&(".*".to_owned()+&find_string.clone()+&".*".to_owned())).unwrap();
+                    for rec in records {
+                        if re.is_match(&rec.unwrap()){
+                            strings.push(Some(field.field_name.clone()));
+                            break;
+                        }
+                    }
+                }
+            }
+            else {
+                for field in qvd_structure.fields.headers {
+                    let records = get_symbols_as_strings(&buf, &field);
+                    if records.into_iter().any(|x| x == Some(find_string.clone())) {
+                        strings.push(Some(field.field_name.clone()));
+                    }
+                }
+            }
+
+            if strings.len() > 0 {
+                dict.set_item(file_name.clone(), strings).unwrap();
             }
         }
-        dict.set_item(file_name.clone(), strings).unwrap();
     }
     Ok(dict.into())
 }

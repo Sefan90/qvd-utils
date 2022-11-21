@@ -19,6 +19,7 @@ crate-type = ["cdylib"]
 serde = { version = "1.0.117", features = ["derive"] }
 quick-xml = { version = "0.20.0", features = ["serialize"]}
 bitvec = "0.19.4"
+regex = "1"
 
 [dependencies.pyo3]
 version = "0.12.3"

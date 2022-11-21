@@ -18,8 +18,12 @@ pip install qvd
 ```python
 from qvd import qvd_reader
 
-df = qvd_reader.read('test.qvd','find_this_string')
+# qvd_reader.read([File list],'find this string',contains string)
+df = qvd_reader.read(['test1.qvd','test2.qvd'],'find_this_string',True)
 print(df)
+
+# Output:
+# {'test1.qvd':['Header1','Header2'],'test2.qvd':['Header3','Header4']}
 ```
 
 ### Developing
