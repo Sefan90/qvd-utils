@@ -20,7 +20,10 @@ from qvd import qvd_reader
 
 # qvd_reader.read([File list],'find this string',contains string)
 df = qvd_reader.read(['test1.qvd','test2.qvd'],'find_this_string',True)
-print(df)
+
+# qvd_reader.read_to_dict([File list],'find this string',contains string)
+dict = qvd_reader.read_to_dict(['test1.qvd','test2.qvd'],'find_this_string',True)
+print(dict)
 
 # Output:
 # {'test1.qvd':['Header1','Header2'],'test2.qvd':['Header3','Header4']}
